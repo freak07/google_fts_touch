@@ -75,6 +75,11 @@
 #include "fts_lib/ftsTime.h"
 #include "fts_lib/ftsTool.h"
 
+
+#ifdef CONFIG_UCI
+#include <linux/inputfilter/sweep2sleep.h>
+#endif
+
 /* Touch simulation MT slot */
 #define TOUCHSIM_SLOT_ID		0
 #define TOUCHSIM_TIMER_INTERVAL_NS	8333333
@@ -1517,8 +1522,22 @@ static void touchsim_report_contact_event(struct input_dev *dev, int slot_id,
 	input_mt_slot(dev, slot_id);
 	input_report_key(dev, BTN_TOUCH, true);
 	input_mt_report_slot_state(dev, MT_TOOL_FINGER, true);
+#ifdef CONFIG_UCI
+                                {
+                                        int x2, y2;
+                                        bool frozen_coords = s2s_freeze_coords(&x2,&y2,x,y);
+//                                	pr_info("%s uci UCI ...\n",__func__);
+                                        if (frozen_coords) {
+	                                            input_report_abs(dev, ABS_MT_POSITION_X, x2);
+	                                            input_report_abs(dev, ABS_MT_POSITION_Y, y2);
+                                        } else {
+#endif
 	input_report_abs(dev, ABS_MT_POSITION_X, x);
 	input_report_abs(dev, ABS_MT_POSITION_Y, y);
+#ifdef CONFIG_UCI
+                                        }
+                                }
+#endif
 	input_report_abs(dev, ABS_MT_PRESSURE, z);
 }
 
@@ -3173,8 +3192,22 @@ static bool fts_enter_pointer_event_handler(struct fts_ts_info *info, unsigned
 	input_mt_slot(info->input_dev, touchId);
 	input_report_key(info->input_dev, BTN_TOUCH, touch_condition);
 	input_mt_report_slot_state(info->input_dev, tool, 1);
+#ifdef CONFIG_UCI
+                                {
+                                        int x2, y2;
+                                        bool frozen_coords = s2s_freeze_coords(&x2,&y2,x,y);
+//                                	pr_info("%s uci UCI ...\n",__func__);
+                                        if (frozen_coords) {
+	                                            input_report_abs(info->input_dev, ABS_MT_POSITION_X, x2);
+	                                            input_report_abs(info->input_dev, ABS_MT_POSITION_Y, y2);
+                                        } else {
+#endif
 	input_report_abs(info->input_dev, ABS_MT_POSITION_X, x);
 	input_report_abs(info->input_dev, ABS_MT_POSITION_Y, y);
+#ifdef CONFIG_UCI
+                                        }
+                                }
+#endif
 	input_report_abs(info->input_dev, ABS_MT_TOUCH_MAJOR, major);
 	input_report_abs(info->input_dev, ABS_MT_TOUCH_MINOR, minor);
 #ifndef SKIP_PRESSURE
@@ -4679,10 +4712,24 @@ static void fts_offload_report(void *handle,
 					 touch_down);
 			input_mt_report_slot_state(info->input_dev,
 						   MT_TOOL_FINGER, 1);
+#ifdef CONFIG_UCI
+                                {
+                                        int x2, y2;
+                                        bool frozen_coords = s2s_freeze_coords(&x2,&y2,report->coords[i].x,report->coords[i].y);
+//                                	pr_info("%s uci UCI ...\n",__func__);
+                                        if (frozen_coords) {
+	                                            input_report_abs(info->input_dev, ABS_MT_POSITION_X, x2);
+	                                            input_report_abs(info->input_dev, ABS_MT_POSITION_Y, y2);
+                                        } else {
+#endif
 			input_report_abs(info->input_dev, ABS_MT_POSITION_X,
 					 report->coords[i].x);
 			input_report_abs(info->input_dev, ABS_MT_POSITION_Y,
 					 report->coords[i].y);
+#ifdef CONFIG_UCI
+                                        }
+                                }
+#endif
 			input_report_abs(info->input_dev, ABS_MT_TOUCH_MAJOR,
 					 report->coords[i].major);
 			input_report_abs(info->input_dev, ABS_MT_TOUCH_MINOR,
@@ -5767,6 +5814,10 @@ static void fts_set_switch_gpio(struct fts_ts_info *info, int gpio_value)
 			__func__, retval);
 }
 
+#ifdef CONFIG_UCI
+extern void uci_screen_state(int state);
+#endif
+
 /**
   * Resume work function which perform a system reset, clean all the touches
   * from the linux input system and prepare the ground for enabling the sensing
@@ -5779,6 +5830,11 @@ static void fts_resume_work(struct work_struct *work)
 
 	if (!info->sensor_sleep)
 		return;
+
+#ifdef CONFIG_UCI
+	pr_info("%s uci screen state call %d... \n",__func__,0);
+	uci_screen_state(2);
+#endif
 
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_TBN)
 	if (info->tbn_register_mask)
@@ -5830,6 +5886,7 @@ static void fts_resume_work(struct work_struct *work)
 	complete_all(&info->bus_resumed);
 }
 
+
 /**
   * Suspend work function which clean all the touches from Linux input system
   * and prepare the ground to disabling the sensing or enter in gesture mode
@@ -5842,6 +5899,11 @@ static void fts_suspend_work(struct work_struct *work)
 
 	if (info->sensor_sleep)
 		return;
+
+#ifdef CONFIG_UCI
+	pr_info("%s uci screen state call %d... \n",__func__,0);
+	uci_screen_state(0);
+#endif
 
 	reinit_completion(&info->bus_resumed);
 
